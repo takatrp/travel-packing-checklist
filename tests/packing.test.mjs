@@ -1,0 +1,16 @@
+import assert from 'node:assert/strict';
+import {initialState,makeItems,patchTrip,validateState,isPacked,migrateState} from '../lib/packing.ts';
+const qty=(s,id)=>makeItems(s).find(i=>i.id===id).qty;
+const d=(work,travel=false,private_=false,transports=[])=>({work,travel,private:private_,transports});
+let s=patchTrip(initialState(),{days:1});assert.equal(qty(s,'underwear'),0);assert.equal(qty(s,'shaver'),0);assert.equal(qty(s,'pc'),1);
+s=initialState();assert.equal(qty(s,'underwear'),1);assert.equal(qty(s,'business-shirt'),1);assert.equal(qty(s,'toothbrush'),1);
+s=patchTrip(s,{days:5});s=patchTrip(s,{daily:[d(true),d(true),d(true,false,true),d(false,false,true),d(false,true)]});assert.equal(qty(s,'underwear'),4);assert.equal(qty(s,'business-shirt'),2);assert.equal(qty(s,'casual-top'),3);
+s=patchTrip(initialState(),{daily:[d(false,false,true),d(false,false,true)]});assert.equal(qty(s,'pc'),0);assert.equal(qty(s,'headset'),0);assert.equal(qty(s,'casual-top'),1);
+s=patchTrip(initialState(),{daily:[d(false,true),d(true)]});assert.equal(qty(s,'business-shirt'),1);assert.equal(qty(s,'business-outfit'),1);assert.equal(qty(s,'casual-top'),0);
+s=patchTrip(initialState(),{daily:[d(true,true,true,['train','flight']),d(false,true,false,['rental'])]});assert.equal(qty(s,'underwear'),1);assert.equal(qty(s,'casual-top'),2);assert.equal(qty(s,'ticket-0-train-booking'),1);assert.equal(qty(s,'ticket-0-flight-ready'),1);assert.equal(qty(s,'ticket-1-rental-license'),1);
+assert.throws(()=>patchTrip(s,{days:0}));assert.throws(()=>patchTrip(s,{days:1.5}));assert.throws(()=>patchTrip(s,{daily:[d(false),d(true)]}));assert.throws(()=>patchTrip(s,{startDate:'2026-02-30'}));
+s=patchTrip(s,{spare:true});assert.equal(qty(s,'underwear'),2);s.overrides.underwear=0;assert.equal(qty(s,'underwear'),0);delete s.overrides.underwear;
+s.custom.push({id:'custom-test',name:'傘',qty:1});assert.equal(qty(s,'custom-test'),1);s.packed['custom-test']=1;assert.equal(isPacked(s,makeItems(s).find(i=>i.id==='custom-test')),true);
+s.packed.underwear=2;assert.equal(isPacked(s,makeItems(s).find(i=>i.id==='underwear')),true);const day0=s.trip.daily[0];s=patchTrip(s,{days:3});assert.deepEqual(s.trip.daily[0],day0);assert.equal(isPacked(s,makeItems(s).find(i=>i.id==='underwear')),false);assert.equal(s.packed.underwear,2);s=patchTrip(s,{days:1});assert.deepEqual(s.trip.daily[0],day0);
+assert.deepEqual(validateState(JSON.parse(JSON.stringify(s))),s);assert.throws(()=>validateState({...s,overrides:{x:-1}}));const old=initialState();delete old.trip.daily;assert.equal(migrateState(old).trip.daily.length,2);
+console.log('PASS: day trip, overnight, daily mixed/private/travel-only, transport tickets, invalid dates/days, spare, zero/restore, custom, stable checks, quantity increases, add/remove day, persisted state, migration');
