@@ -2,11 +2,11 @@ export const PURPOSES = [{id:'meeting',label:'商談・訪問'},{id:'seminar',la
 export const TRANSPORTS=[{id:'train',label:'新幹線・特急'},{id:'flight',label:'飛行機'},{id:'bus',label:'高速バス'},{id:'local',label:'電車・バス'},{id:'rental',label:'レンタカー'},{id:'car',label:'自家用車'}] as const;
 export type City={id:number;name:string;admin?:string;country?:string;lat:number;lon:number;timezone:string};
 export type Day = {work:boolean;travel:boolean;private:boolean;transports?:string[];city?:City|null};
-export type Trip = { startDate?:string;city?:City|null; daily:Day[]; days:number; privateDays:number; purposes:string[]; departure:'business'|'private'; spare:boolean; pc:boolean|null; chargers:boolean };
+export type Trip = { title?:string; startDate?:string;city?:City|null; daily:Day[]; days:number; privateDays:number; purposes:string[]; departure:'business'|'private'; spare:boolean; pc:boolean|null; chargers:boolean };
 export type CustomItem = {id:string;name:string;qty:number};
-export type PackingState = {trip:Trip; overrides:Record<string,number>; packed:Record<string,number>; custom:CustomItem[]};
+export type PackingState = {trip:Trip; overrides:Record<string,number>; packed:Record<string,number>; custom:CustomItem[]; notes?:Record<string,string>};
 export type Item = {id:string; name:string; category:string; qty:number; unit:string; reason:string; auto:number; worn:number; custom?:boolean};
-export const initialState = ():PackingState => ({trip:{startDate:new Intl.DateTimeFormat('en-CA',{timeZone:'Asia/Tokyo',year:'numeric',month:'2-digit',day:'2-digit'}).format(new Date()),city:null,daily:[{work:true,travel:false,private:false},{work:true,travel:false,private:false}],days:2,privateDays:0,purposes:['meeting'],departure:'business',spare:false,pc:null,chargers:false},overrides:{},packed:{},custom:[]});
+export const initialState = ():PackingState => ({trip:{title:'',startDate:new Intl.DateTimeFormat('en-CA',{timeZone:'Asia/Tokyo',year:'numeric',month:'2-digit',day:'2-digit'}).format(new Date()),city:null,daily:[{work:true,travel:false,private:false},{work:true,travel:false,private:false}],days:2,privateDays:0,purposes:['meeting'],departure:'business',spare:false,pc:null,chargers:false},overrides:{},packed:{},custom:[],notes:{}});
 export function validateState(value:unknown):PackingState {
  if (!value || typeof value!=='object') throw new Error('設定を確認してください');
  const s=value as PackingState, t=s.trip;
@@ -14,6 +14,8 @@ export function validateState(value:unknown):PackingState {
  if (!t || !integer(t.days,30)||t.days<1||!integer(t.privateDays,30)||t.privateDays>t.days) throw new Error('全日数は1〜30日、私用の日数は全日数以下にしてください');
  if(!Array.isArray(t.daily)||t.daily.length!==t.days||t.daily.some(d=>!d||[d.work,d.travel,d.private].some(v=>typeof v!=='boolean')||!(d.work||d.travel||d.private)))throw new Error('各日の目的を1つ以上選んでください');
  if(t.startDate!==undefined&&(!/^\d{4}-\d{2}-\d{2}$/.test(t.startDate)||Number.isNaN(new Date(t.startDate+'T00:00:00Z').getTime())||new Date(t.startDate+'T00:00:00Z').toISOString().slice(0,10)!==t.startDate))throw new Error('出発日を確認してください');
+ if(t.title!==undefined&&(typeof t.title!=='string'||t.title.length>100))throw new Error('出張タイトルは100文字以内で入力してください');
+ if(s.notes!==undefined&&(!s.notes||typeof s.notes!=='object'||Array.isArray(s.notes)||Object.keys(s.notes).length>500||Object.entries(s.notes).some(([id,note])=>!/^[a-zA-Z0-9_-]{1,80}$/.test(id)||typeof note!=='string'||note.length>1000)))throw new Error('メモは各1000文字以内で入力してください');
  const cities=[t.city,...t.daily.map(d=>d.city)].filter(Boolean) as City[];if(cities.some(c=>typeof c.name!=='string'||c.name.length>100||typeof c.lat!=='number'||!Number.isFinite(c.lat)||Math.abs(c.lat)>90||typeof c.lon!=='number'||!Number.isFinite(c.lon)||Math.abs(c.lon)>180||typeof c.timezone!=='string'||c.timezone.length>80))throw new Error('行き先を選び直してください');
  if(t.daily.some(d=>d.transports&&(!Array.isArray(d.transports)||d.transports.some(x=>!TRANSPORTS.some(t=>t.id===x)))))throw new Error('移動手段を確認してください');
  if (!Array.isArray(t.purposes)||t.purposes.some(p=>!PURPOSES.some(x=>x.id===p))||!['business','private'].includes(t.departure)||typeof t.spare!=='boolean'||typeof t.chargers!=='boolean'||!(t.pc===null||typeof t.pc==='boolean')) throw new Error('出張の条件を確認してください');
@@ -23,7 +25,7 @@ export function validateState(value:unknown):PackingState {
  return s;
 }
 // Reuse matching custom rows rather than losing their saved IDs, quantities or checks.
-const workGear=[{id:'roba',name:'roBa'},{id:'napepro',name:'Napepro'},{id:'xreal-one-pro',name:'Xreal one pro'},{id:'pc-battery',name:'PCバッテリー'}] as const;
+const workGear=[{id:'roba',name:'roBa'},{id:'napepro',name:'Napepro'},{id:'xreal-one-pro',name:'Xreal one pro'},{id:'pc-battery',name:'PCバッテリー'},{id:'client-documents',name:'顧客用資料'},{id:'training-meeting-documents',name:'研修・会議用資料'},{id:'writing-tools',name:'筆記用具'},{id:'even-g2-r1',name:'even G2 R1'}] as const;
 const gearKey=(name:string)=>name.normalize('NFKC').replace(/\s+/g,'').toLowerCase();
 const isWorkGear=(name:string)=>workGear.some(gear=>gearKey(gear.name)===gearKey(name));
 export function makeItems(s:PackingState):Item[]{

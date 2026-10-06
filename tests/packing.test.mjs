@@ -34,3 +34,29 @@ const privateTrip=patchTrip(initialState(),{daily:[d(false,false,true),d(false,f
 const customWithoutPc=patchTrip(loaded,{pc:false});assert.equal(qty(customWithoutPc,'custom-roba'),2);assert.equal(qty(customWithoutPc,'custom-nape'),1);assert.equal(qty(customWithoutPc,'custom-xreal'),0);assert.equal(qty(customWithoutPc,'custom-battery'),1);
 s.overrides['pc-battery']=2;s.packed['pc-battery']=1;assert.equal(qty(s,'pc-battery'),2);assert.equal(isPacked(s,makeItems(s).find(i=>i.id==='pc-battery')),false);
 console.log('PASS: four work/electronics items, existing custom IDs/checks/quantities/exclusions preserved, no duplicates or mutation, PC condition, override/recheck');
+
+// Titles and notes are optional so all previously saved v1 data remains readable.
+const legacy=initialState();delete legacy.trip.title;delete legacy.notes;
+legacy.custom=[{id:'custom-docs',name:'顧客用資料',qty:3},{id:'custom-even',name:'ＥＶＥＮ G2 R1',qty:2}];
+legacy.overrides={'custom-even':0};legacy.packed={'custom-docs':3};
+const oldJson=JSON.stringify(legacy),loadedLegacy=migrateState(JSON.parse(oldJson));
+assert.equal(JSON.stringify(loadedLegacy),oldJson);
+const newIds=['client-documents','training-meeting-documents','writing-tools','even-g2-r1'];
+for(const id of newIds){assert.equal(qty(initialState(),id),1);assert.equal(qty(patchTrip(initialState(),{pc:false}),id),1);}
+assert.equal(makeItems(loadedLegacy).filter(i=>i.name==='顧客用資料').length,1);
+assert.equal(makeItems(loadedLegacy).some(i=>i.id==='even-g2-r1'),false);
+assert.equal(makeItems(loadedLegacy).find(i=>i.id==='custom-docs').category,'仕事・電源');
+assert.equal(isPacked(loadedLegacy,makeItems(loadedLegacy).find(i=>i.id==='custom-docs')),true);
+let annotated=patchTrip(loadedLegacy,{title:'東京出張・研修'});
+annotated.notes={'custom-docs':'顧客用の架空資料 3部\n手荷物へ',underwear:'予備', 'custom-even':'不要だがメモは保持'};
+const roundtrip=migrateState(JSON.parse(JSON.stringify(annotated)));assert.deepEqual(roundtrip,annotated);
+const reset={...roundtrip,packed:{}};assert.equal(reset.trip.title,'東京出張・研修');assert.deepEqual(reset.notes,annotated.notes);assert.deepEqual(reset.custom,loadedLegacy.custom);assert.deepEqual(reset.overrides,loadedLegacy.overrides);
+const cleared=patchTrip({...reset,notes:{...reset.notes,underwear:''}},{title:''});
+assert.equal(migrateState(JSON.parse(JSON.stringify(cleared))).trip.title,'');assert.equal(migrateState(JSON.parse(JSON.stringify(cleared))).notes.underwear,'');
+assert.deepEqual(patchTrip(annotated,{days:1,pc:false}).notes,annotated.notes);
+const markup='<img src=x onerror=alert(1)> & <script>alert(1)</script>';
+assert.equal(validateState({...annotated,notes:{underwear:markup},trip:{...annotated.trip,title:markup}}).notes.underwear,markup);
+assert.throws(()=>patchTrip(annotated,{title:'x'.repeat(101)}));assert.throws(()=>patchTrip(annotated,{title:12}));
+for(const notes of [null,[],{underwear:42},{underwear:'x'.repeat(1001)},{'invalid key':'x'}])assert.throws(()=>validateState({...annotated,notes}));
+validateState({...annotated,notes:{underwear:'x'.repeat(1000)}});patchTrip(annotated,{title:'x'.repeat(100)});
+console.log('PASS: new gear, PC independence, duplicate custom preservation, legacy migration, title/note persistence, empty clearing, reset retention, markup as plain data, input validation');
