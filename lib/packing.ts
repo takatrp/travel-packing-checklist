@@ -22,6 +22,10 @@ export function validateState(value:unknown):PackingState {
  if(new Set(s.custom.map(i=>i.id)).size!==s.custom.length) throw new Error('持ち物のIDが重複しています');
  return s;
 }
+// Reuse matching custom rows rather than losing their saved IDs, quantities or checks.
+const workGear=[{id:'roba',name:'roBa'},{id:'napepro',name:'Napepro'},{id:'xreal-one-pro',name:'Xreal one pro'},{id:'pc-battery',name:'PCバッテリー'}] as const;
+const gearKey=(name:string)=>name.normalize('NFKC').replace(/\s+/g,'').toLowerCase();
+const isWorkGear=(name:string)=>workGear.some(gear=>gearKey(gear.name)===gearKey(name));
 export function makeItems(s:PackingState):Item[]{
  const t=s.trip,b=t.daily.filter(d=>d.work).length,casualDays=t.daily.filter(d=>d.private||!d.work).length,n=t.days-1,bus=b>0,pri=casualDays>0;
  const first=t.daily[0],wearBus=first.work&&(!first.private||t.departure==='business'),wearPri=!wearBus;
@@ -41,6 +45,7 @@ export function makeItems(s:PackingState):Item[]{
  add('nightwear','部屋着・寝間着','衣類',n>0?1:0,'組','宿泊する場合');
  add('pc','PC','仕事・電源',pc?1:0,'台');
  add('pc-power','PC用電源アダプター','仕事・電源',pc?1:0,'個');
+ for(const gear of workGear) if(!s.custom.some(c=>gearKey(c.name)===gearKey(gear.name))) add(gear.id,gear.name,'仕事・電源',gear.id==='pc-battery'?(pc?1:0):1,'点');
  add('pc-cable','PC用充電ケーブル','仕事・電源',pc?1:0,'本','電源一体型なら不要');
  add('headset','ヘッドセット','仕事・電源',bus?1:0,'個','会議・作業用');
  add('presentation','映像出力アダプター','仕事・電源',bus&&t.purposes.includes('presentation')?1:0,'個','登壇・発表用');
@@ -59,7 +64,7 @@ export function makeItems(s:PackingState):Item[]{
  if(mode==='local')add(`ticket-${index}-${mode}-ready`,`${prefix}：IC・乗車券を確認`,'移動・チケット',1,'件','残高や利用区間も確認');
  if(mode==='rental'||mode==='car')add(`ticket-${index}-${mode}-license`,`${prefix}：運転免許証`,'移動・チケット',1,'点');
  }});
- for(const c of s.custom) items.push({id:c.id,name:c.name,category:'自分で追加',qty:s.overrides[c.id]??c.qty,auto:c.qty,unit:'点',reason:'',worn:0,custom:true});
+ for(const c of s.custom) items.push({id:c.id,name:c.name,category:isWorkGear(c.name)?'仕事・電源':'自分で追加',qty:s.overrides[c.id]??c.qty,auto:c.qty,unit:'点',reason:'',worn:0,custom:true});
  return items;
 }
 export const isPacked=(s:PackingState,i:Item)=>i.qty>0&&(s.packed[i.id]??0)>=i.qty;

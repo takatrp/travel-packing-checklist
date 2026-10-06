@@ -14,3 +14,23 @@ s.custom.push({id:'custom-test',name:'傘',qty:1});assert.equal(qty(s,'custom-te
 s.packed.underwear=2;assert.equal(isPacked(s,makeItems(s).find(i=>i.id==='underwear')),true);const day0=s.trip.daily[0];s=patchTrip(s,{days:3});assert.deepEqual(s.trip.daily[0],day0);assert.equal(isPacked(s,makeItems(s).find(i=>i.id==='underwear')),false);assert.equal(s.packed.underwear,2);s=patchTrip(s,{days:1});assert.deepEqual(s.trip.daily[0],day0);
 assert.deepEqual(validateState(JSON.parse(JSON.stringify(s))),s);assert.throws(()=>validateState({...s,overrides:{x:-1}}));const old=initialState();delete old.trip.daily;assert.equal(migrateState(old).trip.daily.length,2);
 console.log('PASS: day trip, overnight, daily mixed/private/travel-only, transport tickets, invalid dates/days, spare, zero/restore, custom, stable checks, quantity increases, add/remove day, persisted state, migration');
+
+const gearNames=['roBa','Napepro','Xreal one pro','PCバッテリー'];
+s=initialState();
+for(const name of gearNames){const rows=makeItems(s).filter(i=>i.name===name);assert.equal(rows.length,1);assert.equal(rows[0].category,'仕事・電源');assert.equal(rows[0].qty,1);}
+const saved=initialState();
+saved.custom=[{id:'custom-roba',name:'roBa',qty:2},{id:'custom-nape',name:'Napepro',qty:1},{id:'custom-xreal',name:'Xreal one pro',qty:1},{id:'custom-battery',name:'ＰＣバッテリー',qty:1},{id:'custom-other',name:'傘',qty:1}];
+saved.packed={'custom-roba':2,'custom-nape':1,'custom-xreal':1,underwear:1};saved.overrides={'custom-xreal':0};
+const original=JSON.stringify(saved),loaded=migrateState(JSON.parse(original));
+for(const id of ['custom-roba','custom-nape','custom-xreal','custom-battery'])assert.equal(makeItems(loaded).find(i=>i.id===id).category,'仕事・電源');
+assert.equal(makeItems(loaded).filter(i=>i.name==='roBa').length,1);
+assert.equal(makeItems(loaded).some(i=>i.id==='roba'||i.id==='napepro'||i.id==='xreal-one-pro'||i.id==='pc-battery'),false);
+assert.equal(qty(loaded,'custom-roba'),2);assert.equal(qty(loaded,'custom-xreal'),0);
+assert.ok(isPacked(loaded,makeItems(loaded).find(i=>i.id==='custom-roba')));
+assert.equal(makeItems(loaded).find(i=>i.id==='custom-other').category,'自分で追加');
+assert.equal(JSON.stringify(loaded),original);assert.equal(JSON.stringify(saved),original);
+s=patchTrip(initialState(),{pc:false});assert.equal(qty(s,'pc-battery'),0);for(const id of ['roba','napepro','xreal-one-pro'])assert.equal(qty(s,id),1);
+const privateTrip=patchTrip(initialState(),{daily:[d(false,false,true),d(false,false,true)]});for(const id of ['roba','napepro','xreal-one-pro'])assert.equal(qty(privateTrip,id),1);assert.equal(qty(privateTrip,'pc-battery'),0);
+const customWithoutPc=patchTrip(loaded,{pc:false});assert.equal(qty(customWithoutPc,'custom-roba'),2);assert.equal(qty(customWithoutPc,'custom-nape'),1);assert.equal(qty(customWithoutPc,'custom-xreal'),0);assert.equal(qty(customWithoutPc,'custom-battery'),1);
+s.overrides['pc-battery']=2;s.packed['pc-battery']=1;assert.equal(qty(s,'pc-battery'),2);assert.equal(isPacked(s,makeItems(s).find(i=>i.id==='pc-battery')),false);
+console.log('PASS: four work/electronics items, existing custom IDs/checks/quantities/exclusions preserved, no duplicates or mutation, PC condition, override/recheck');
